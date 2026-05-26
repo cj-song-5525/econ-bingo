@@ -40,7 +40,7 @@ QUIZZES = [
 def get_global_state():
     return {
         "admin_started": False,
-        "max_per_room": 6,
+        "max_per_room": 6,  # 기본값 6명
         "rooms": {},     
         "players": {}    
     }
@@ -82,7 +82,6 @@ st.title("📊 경제학 빙고 & 팝퀴즈 챌린지")
 if "nickname" not in st.session_state:
     st.subheader("입장하기")
     
-    # 닉네임과 관리자 비밀번호 입력 필드 분리
     col1, col2 = st.columns(2)
     with col1:
         nickname = st.text_input("닉네임을 입력하세요 (한글 7글자 이내)")
@@ -90,16 +89,13 @@ if "nickname" not in st.session_state:
         admin_pw = st.text_input("관리자 비밀번호 (학생은 비워두세요)", type="password")
         
     if st.button("접속"):
-        # 1. 관리자 접속 시도
         if nickname == "admin":
             if admin_pw == "2556":
                 st.session_state["nickname"] = "admin"
                 st.rerun()
             else:
                 st.error("관리자 비밀번호가 일치하지 않습니다.")
-        # 2. 일반 학생 접속 시도
         else:
-            # 닉네임 유효성 검사 (한글 1~7글자)
             if not re.match(r'^[가-힣]{1,7}$', nickname):
                 st.warning("⚠️ 닉네임은 공백, 숫자, 영문 없이 '한글 7글자 이내'로만 작성해주세요.")
             else:
@@ -122,11 +118,20 @@ elif st.session_state["nickname"] == "admin":
     with col1:
         st.subheader("게임 통제 센터")
         if not db["admin_started"]:
+            # --- [추가된 부분] 관리자가 직접 방별 최대 인원을 설정할 수 있는 기능 ---
+            new_max = st.selectbox(
+                "👥 1개 조(방)당 최대 인원 설정", 
+                [3, 4, 5, 6, 7, 8], 
+                index=[3, 4, 5, 6, 7, 8].index(db["max_per_room"])
+            )
+            db["max_per_room"] = new_max
+            st.caption(f"현재 {new_max}명씩 자동으로 방이 배정됩니다.")
+            
             if st.button("🚀 전체 게임 시작 (신규 접속 차단)"):
                 db["admin_started"] = True
                 st.rerun()
         else:
-            st.error("게임이 진행 중입니다.")
+            st.error("게임이 진행 중입니다. (인원 설정 변경 불가)")
             
     with col2:
         if st.button("🔄 실시간 순위 업데이트", type="primary", use_container_width=True):
