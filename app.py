@@ -40,7 +40,8 @@ QUIZZES = [
 def get_global_state():
     return {
         "admin_started": False,
-        "max_per_room": 6,  # 기본값 6명
+        "game_over": False,  # [추가] 게임 종료 유무 판단 플래그
+        "max_per_room": 6,     
         "rooms": {},     
         "players": {}    
     }
@@ -111,14 +112,16 @@ if "nickname" not in st.session_state:
                     st.session_state["nickname"] = nickname
                     st.rerun()
 
+# [B] 관리자 화면
 elif st.session_state["nickname"] == "admin":
     st.sidebar.success("👨‍🏫 관리자 모드 접속 중")
     
     col1, col2 = st.columns([2, 1])
     with col1:
         st.subheader("게임 통제 센터")
+        
+        # 단계별 관리자 UI 제어 흐름
         if not db["admin_started"]:
-            # --- [추가된 부분] 관리자가 직접 방별 최대 인원을 설정할 수 있는 기능 ---
             new_max = st.selectbox(
                 "👥 1개 조(방)당 최대 인원 설정", 
                 [3, 4, 5, 6, 7, 8], 
@@ -127,12 +130,26 @@ elif st.session_state["nickname"] == "admin":
             db["max_per_room"] = new_max
             st.caption(f"현재 {new_max}명씩 자동으로 방이 배정됩니다.")
             
-            if st.button("🚀 전체 게임 시작 (신규 접속 차단)"):
+            if st.button("🚀 전체 게임 시작 (신규 접속 차단)", use_container_width=True):
                 db["admin_started"] = True
+                db["game_over"] = False
                 st.rerun()
+                
         else:
-            st.error("게임이 진행 중입니다. (인원 설정 변경 불가)")
-            
+            if not db["game_over"]:
+                st.success("▶️ 현재 실시간으로 게임이 진행 중입니다.")
+                if st.button("🛑 게임 최종 종료 (학생 화면 잠금 및 순위 동결)", type="primary", use_container_width=True):
+                    db["game_over"] = True
+                    st.rerun()
+            else:
+                st.error("🏁 게임이 정상적으로 종료되었습니다. 최종 순위를 확인하세요.")
+                if st.button("🔄 전체 데이터 초기화 (다음 수업/새 게임 준비)", use_container_width=True):
+                    db["admin_started"] = False
+                    db["game_over"] = False
+                    db["rooms"] = {}
+                    db["players"] = {}
+                    st.rerun()
+
     with col2:
         if st.button("🔄 실시간 순위 업데이트", type="primary", use_container_width=True):
             st.rerun()
@@ -153,17 +170,23 @@ elif st.session_state["nickname"] == "admin":
                 lines = p_data['lines']
                 
                 if lines >= 3:
-                    st.markdown(f"**👑 {p} : BINGO!! (3줄 완성)**")
+                    st.markdown(f"**👑 {p} : BINGO!! ({lines}줄 완성)**")
                 elif db["admin_started"]:
                     st.markdown(f"- {p} : {lines}줄 완성")
                 else:
                     st.markdown(f"- {p} : {status}")
 
+# [C] 학생 화면
 else:
     nickname = st.session_state["nickname"]
     p_data = db["players"][nickname]
     my_room_id = p_data["room"]
     room_data = db["rooms"][my_room_id]
+    
+    # 상단 글로벌 종료 안내 메시지
+    is_frozen = db["game_over"]
+    if is_frozen:
+        st.error("🏁 교수님이 게임을 종료했습니다! 칠판(화면)을 통해 최종 등수를 확인하세요.")
     
     st.sidebar.write(f"👤 **{nickname}** 님 (소속: {my_room_id}조)")
     if st.sidebar.button("🔄 진행 상황 동기화"):
@@ -205,7 +228,7 @@ else:
         st.subheader(quiz["question"])
         
         for idx, option in enumerate(quiz["options"]):
-            if st.button(f"{idx + 1}. {option}", use_container_width=True):
+            if st.button(f"{idx + 1}. {option}", use_container_width=True, disabled=is_frozen):
                 if idx == quiz["answer_index"]:
                     room_data["quiz_winner"] = nickname
                     room_data["quiz_active"] = False 
@@ -218,7 +241,7 @@ else:
         p_data["lines"] = calculate_lines(p_data["checked"])
         if p_data["lines"] >= 3:
             st.balloons()
-            st.success("🎉 BINGO! 3줄을 완성했습니다!")
+            st.success(f"🎉 BINGO! 총 {p_data['lines']}줄을 완성했습니다!")
         else:
             st.info(f"현재 {p_data['lines']}줄 완성!")
             
@@ -226,7 +249,7 @@ else:
         
         if current_turn_player == nickname:
             st.warning("📣 내 차례입니다! 친구들이 체크할 수 있도록 단어를 외치고 아래에서 [다음 턴으로 넘기기]를 누르세요.")
-            if st.button("⏭️ 다음 턴으로 넘기기 (클릭 시 턴 종료)", type="primary"):
+            if st.button("⏭️ 다음 턴으로 넘기기 (클릭 시 턴 종료)", type="primary", disabled=is_frozen):
                 room_data['turn'] += 1
                 if room_data['turn'] - 1 in [5, 10, 15]:
                     room_data["quiz_active"] = True
@@ -246,6 +269,7 @@ else:
                 
                 btn_text = f"✅ ~{word}~" if is_checked else word
                 
-                if cols[j].button(btn_text, key=f"btn_{i}_{j}", use_container_width=True):
+                # 게임 종료 시 모든 빙고 단어판 클릭 비활성화(disabled=is_frozen)
+                if cols[j].button(btn_text, key=f"btn_{i}_{j}", use_container_width=True, disabled=is_frozen):
                     p_data['checked'][i][j] = not is_checked 
                     st.rerun()
