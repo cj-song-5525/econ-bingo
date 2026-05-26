@@ -3,7 +3,7 @@ import math
 import re
 
 # ==========================================
-# 1. 게임 기본 세팅
+# 1. 게임 기본 세팅 (가로 레이아웃 유지)
 # ==========================================
 st.set_page_config(page_title="경제학 빙고 게임", layout="wide")
 
@@ -61,7 +61,6 @@ def assign_room(nickname):
     room_num = 1
     while True:
         if room_num not in db["rooms"]:
-            # [버그 수정 완료] quiz_winners를 리스트가 아닌 딕셔너리로 관리하여 우승자를 라운드별로 누적 저장합니다.
             db["rooms"][room_num] = {'players': [], 'turn': 1, 'quiz_active': False, 'quiz_winners': {}, 'quiz_idx': 0}
         
         if len(db["rooms"][room_num]['players']) < db["max_per_room"]:
@@ -77,13 +76,51 @@ def assign_room(nickname):
         room_num += 1
 
 # ==========================================
-# 3. 화면 분기 (라우팅 및 로그인 로직) 
+# 4. 네이티브 백그라운드 동기화 엔진 (핵심 변경점)
+# ==========================================
+if "nickname" in st.session_state:
+    if st.session_state["nickname"] == "admin":
+        # 관리자용 백그라운드 스캔 엔진 (학생들의 상태 변화를 3초마다 감지하여 자동 새로고침)
+        @st.fragment(run_every=3)
+        def admin_sync_engine():
+            state_marker = str(db["players"]) + str(db["rooms"])
+            if "admin_hash" not in st.session_state or st.session_state["admin_hash"] != state_marker:
+                st.session_state["admin_hash"] = state_marker
+                st.rerun()
+        admin_sync_engine()
+    else:
+        # 학생용 백그라운드 스캔 엔진 (교수님의 시작, 앞사람의 턴 종료, 퀴즈 발동을 2초마다 감지하여 클릭 방해 없이 리런)
+        nick = st.session_state["nickname"]
+        if nick in db["players"]:
+            r_id = db["players"][nick]["room"]
+            r_data = db["rooms"][r_id]
+            
+            if "l_turn" not in st.session_state: st.session_state["l_turn"] = r_data["turn"]
+            if "l_quiz" not in st.session_state: st.session_state["l_quiz"] = r_data["quiz_active"]
+            if "l_start" not in st.session_state: st.session_state["l_start"] = db["admin_started"]
+            if "l_over" not in st.session_state: st.session_state["l_over"] = db["game_over"]
+
+            @st.fragment(run_every=2)
+            def student_sync_engine():
+                if (st.session_state["l_turn"] != r_data["turn"] or 
+                    st.session_state["l_quiz"] != r_data["quiz_active"] or 
+                    st.session_state["l_start"] != db["admin_started"] or 
+                    st.session_state["l_over"] != db["game_over"]):
+                    
+                    st.session_state["l_turn"] = r_data["turn"]
+                    st.session_state["l_quiz"] = r_data["quiz_active"]
+                    st.session_state["l_start"] = db["admin_started"]
+                    st.session_state["l_over"] = db["game_over"]
+                    st.rerun()
+            student_sync_engine()
+
+# ==========================================
+# 5. 화면 분기 및 UI 렌더링
 # ==========================================
 st.title("📊 경제학 빙고 & 팝퀴즈 챌린지")
 
 if "nickname" not in st.session_state:
     st.subheader("입장하기")
-    
     col1, col2 = st.columns(2)
     with col1:
         nickname = st.text_input("닉네임을 입력하세요 (한글 7글자 이내)")
@@ -115,7 +152,7 @@ if "nickname" not in st.session_state:
 
 # [B] 관리자 화면
 elif st.session_state["nickname"] == "admin":
-    st.sidebar.success("👨‍🏫 관리자 모드 접속 중")
+    st.sidebar.success("👨‍🏫 관리자 모드 접속 중 (화면 자동 동기화 활성)")
     
     col1, col2 = st.columns([2, 1])
     with col1:
@@ -151,7 +188,7 @@ elif st.session_state["nickname"] == "admin":
                     st.rerun()
 
     with col2:
-        if st.button("🔄 실시간 순위 업데이트", type="primary", use_container_width=True):
+        if st.button("🔄 즉시 수동 업데이트", type="primary", use_container_width=True):
             st.rerun()
 
     st.markdown("---")
@@ -161,7 +198,6 @@ elif st.session_state["nickname"] == "admin":
         with room_cols[idx % len(room_cols)]:
             st.markdown(f"### 🚪 {room_id}조 (현재 {room_data['turn']}턴)")
             
-            # [버그 수정 완료] 팝퀴즈 우승자가 덮어씌워지지 않고, 라운드별로 누적되어 표시됩니다.
             if room_data["quiz_winners"]:
                 for q_idx, winner in room_data["quiz_winners"].items():
                     round_num = (q_idx + 1) * 5
@@ -220,7 +256,7 @@ else:
                 st.error("중복된 용어가 있습니다. 모두 다른 용어로 채워주세요.")
                 
     elif not db["admin_started"]:
-        st.warning("교수님이 게임을 시작할 때까지 잠시 대기해주세요.")
+        st.warning("교수님이 게임을 시작할 때까지 잠시 대기해주세요. (시작 시 화면이 자동으로 바뀝니다)")
         
     elif room_data["quiz_active"]:
         st.error("🚨 스피드 팝퀴즈 발생! 빙고판이 잠시 사라집니다.")
@@ -230,7 +266,6 @@ else:
         for idx, option in enumerate(quiz["options"]):
             if st.button(f"{idx + 1}. {option}", use_container_width=True, disabled=is_frozen):
                 if idx == quiz["answer_index"]:
-                    # [버그 수정 완료] 현재 진행 중인 퀴즈의 인덱스에 우승자를 안전하게 저장
                     room_data["quiz_winners"][room_data["quiz_idx"]] = nickname
                     room_data["quiz_active"] = False 
                     st.success("정답입니다! 퀴즈 우승자로 기록되었습니다.")
@@ -240,9 +275,6 @@ else:
 
     else:
         p_data["lines"] = calculate_lines(p_data["checked"])
-        
-        # [UX 개선] 학생들이 직관적으로 턴을 업데이트할 수 있도록 사이드바에서 메인 화면 정중앙으로 이동
-        st.button("🔄 현재 진행 상황 동기화 (새로고침)", use_container_width=True)
         
         if p_data["lines"] >= 3:
             st.balloons()
