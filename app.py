@@ -7,24 +7,31 @@ import re
 # ==========================================
 st.set_page_config(page_title="경제학 빙고 게임", layout="wide")
 
-# [추가] 모바일 빙고판 4x4 고정 및 버튼 크기 최적화 CSS
+# [강력한 수정판] 모바일 빙고판 4x4 강제 고정 CSS
 st.markdown("""
 <style>
-    /* 1. 모바일에서 4칸이 밑으로 떨어지는 현상 강제 방지 (1줄에 4칸 고정) */
-    [data-testid="column"] {
-        width: 25% !important;
-        flex: 1 1 25% !important;
-        min-width: 25% !important;
-        padding: 2px !important;
+    /* 1. 부모 컨테이너가 모바일에서 세로로 꺾이는 것을 원천 차단 */
+    div[data-testid="stHorizontalBlock"] {
+        flex-wrap: nowrap !important;
+        gap: 2px !important;
     }
     
-    /* 2. 빙고 버튼의 여백을 없애고 세로 길이를 스마트폰에 맞게 조정 */
+    /* 2. 각 칸을 정확히 4등분(25%)으로 고정 */
+    div[data-testid="column"] {
+        width: 25% !important;
+        min-width: 25% !important;
+        flex: 1 1 25% !important;
+        padding: 0px !important;
+    }
+    
+    /* 3. 버튼 디자인 및 텍스트 줄바꿈 최적화 */
     .stButton > button {
-        height: 65px !important;          /* 버튼 세로 높이 고정 (화면 비율에 맞춤) */
-        padding: 0px 2px !important;      /* 버튼 안쪽 여백 최소화 */
-        font-size: 13px !important;       /* 경제학 용어가 잘리지 않도록 폰트 크기 조정 */
-        word-break: keep-all !important;  /* 기회비용이 기회/비용으로 줄바꿈되는 것 방지 */
-        white-space: pre-wrap !important; 
+        height: 70px !important;
+        width: 100% !important;
+        padding: 0px !important;
+        font-size: 12px !important;
+        word-break: keep-all !important;
+        white-space: pre-wrap !important;
     }
 </style>
 """, unsafe_allow_html=True)
