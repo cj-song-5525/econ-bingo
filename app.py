@@ -1,6 +1,7 @@
 import streamlit as st
 import math
 import re
+from streamlit_autorefresh import st_autorefresh  # [추가된 핵심 패키지]
 
 # ==========================================
 # 1. 게임 기본 세팅
@@ -61,7 +62,8 @@ def assign_room(nickname):
     room_num = 1
     while True:
         if room_num not in db["rooms"]:
-            db["rooms"][room_num] = {'players': [], 'turn': 1, 'quiz_active': False, 'quiz_winner': None, 'quiz_idx': 0}
+            # [수정됨] quiz_winner (단일) -> quiz_winners (사전) 으로 변경하여 누적 저장
+            db["rooms"][room_num] = {'players': [], 'turn': 1, 'quiz_active': False, 'quiz_winners': {}, 'quiz_idx': 0}
         
         if len(db["rooms"][room_num]['players']) < db["max_per_room"]:
             db["rooms"][room_num]['players'].append(nickname)
@@ -116,6 +118,11 @@ if "nickname" not in st.session_state:
 elif st.session_state["nickname"] == "admin":
     st.sidebar.success("👨‍🏫 관리자 모드 접속 중")
     
+    # [추가됨] 관리자 화면 자동 새로고침 토글
+    auto_refresh_admin = st.sidebar.checkbox("🔄 화면 자동 새로고침 켜기 (3초 간격)", value=True)
+    if auto_refresh_admin and not db["game_over"]:
+        st_autorefresh(interval=3000, key="admin_sync")
+    
     col1, col2 = st.columns([2, 1])
     with col1:
         st.subheader("게임 통제 센터")
@@ -150,7 +157,7 @@ elif st.session_state["nickname"] == "admin":
                     st.rerun()
 
     with col2:
-        if st.button("🔄 실시간 순위 업데이트", type="primary", use_container_width=True):
+        if st.button("🔄 수동 순위 업데이트", use_container_width=True):
             st.rerun()
 
     st.markdown("---")
@@ -160,8 +167,11 @@ elif st.session_state["nickname"] == "admin":
         with room_cols[idx % len(room_cols)]:
             st.markdown(f"### 🚪 {room_id}조 (현재 {room_data['turn']}턴)")
             
-            if room_data["quiz_winner"]:
-                st.success(f"🎁 퀴즈 우승: {room_data['quiz_winner']}")
+            # [수정됨] 팝퀴즈 우승자 누적 표시
+            if room_data["quiz_winners"]:
+                for q_idx, winner in room_data["quiz_winners"].items():
+                    round_num = (q_idx + 1) * 5
+                    st.success(f"🎁 {round_num}R 퀴즈 우승: {winner}")
                 
             for p in room_data['players']:
                 p_data = db["players"][p]
@@ -186,9 +196,15 @@ else:
     if is_frozen:
         st.error("🏁 교수님이 게임을 종료했습니다! 칠판(화면)을 통해 최종 등수를 확인하세요.")
     
+    # --- [핵심 추가] 학생 자동 동기화(Auto-refresh) 로직 ---
+    # 1. 게임이 시작되었고 종료되지 않았을 때
+    # 2. 내 차례가 아니거나(대기 중), 팝퀴즈가 진행 중이면 2.5초마다 자동으로 화면을 새로고침 합니다.
+    if db["admin_started"] and not is_frozen:
+        current_turn_player = room_data['players'][(room_data['turn'] - 1) % len(room_data['players'])] if room_data['players'] else None
+        if room_data["quiz_active"] or current_turn_player != nickname:
+            st_autorefresh(interval=2500, key="student_sync")
+    
     st.sidebar.write(f"👤 **{nickname}** 님 (소속: {my_room_id}조)")
-    if st.sidebar.button("🔄 진행 상황 동기화"):
-        st.rerun()
 
     if not p_data["ready"]:
         st.info("아래 16칸에 원하는 경제학 용어를 선택하여 빙고판을 완성하세요. (중복 선택 불가)")
@@ -228,7 +244,8 @@ else:
         for idx, option in enumerate(quiz["options"]):
             if st.button(f"{idx + 1}. {option}", use_container_width=True, disabled=is_frozen):
                 if idx == quiz["answer_index"]:
-                    room_data["quiz_winner"] = nickname
+                    # [수정됨] 정답을 맞추면 해당 라운드(인덱스)에 우승자 이름 저장
+                    room_data["quiz_winners"][room_data["quiz_idx"]] = nickname
                     room_data["quiz_active"] = False 
                     st.success("정답입니다! 퀴즈 우승자로 기록되었습니다.")
                     st.rerun()
@@ -252,7 +269,6 @@ else:
                 if room_data['turn'] - 1 in [5, 10, 15]:
                     room_data["quiz_active"] = True
                     room_data["quiz_idx"] = ((room_data['turn'] - 1) // 5) - 1
-                    room_data["quiz_winner"] = None
                 st.rerun()
         else:
             st.info(f"현재 **{current_turn_player}** 님의 차례입니다. 호명된 단어를 내 빙고판에서 클릭하여 지우세요.")
