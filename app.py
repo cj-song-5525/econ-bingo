@@ -7,6 +7,28 @@ import re
 # ==========================================
 st.set_page_config(page_title="경제학 빙고 게임", layout="wide")
 
+# [추가] 모바일 빙고판 4x4 고정 및 버튼 크기 최적화 CSS
+st.markdown("""
+<style>
+    /* 1. 모바일에서 4칸이 밑으로 떨어지는 현상 강제 방지 (1줄에 4칸 고정) */
+    [data-testid="column"] {
+        width: 25% !important;
+        flex: 1 1 25% !important;
+        min-width: 25% !important;
+        padding: 2px !important;
+    }
+    
+    /* 2. 빙고 버튼의 여백을 없애고 세로 길이를 스마트폰에 맞게 조정 */
+    .stButton > button {
+        height: 65px !important;          /* 버튼 세로 높이 고정 (화면 비율에 맞춤) */
+        padding: 0px 2px !important;      /* 버튼 안쪽 여백 최소화 */
+        font-size: 13px !important;       /* 경제학 용어가 잘리지 않도록 폰트 크기 조정 */
+        word-break: keep-all !important;  /* 기회비용이 기회/비용으로 줄바꿈되는 것 방지 */
+        white-space: pre-wrap !important; 
+    }
+</style>
+""", unsafe_allow_html=True)
+
 TERMS = [
     "수요", "공급", "기회비용", "독점", "과점", "GDP", "인플레이션", 
     "디플레이션", "GNP", "거시경제학", "미시경제학", "대체재", "국채", 
