@@ -40,7 +40,7 @@ QUIZZES = [
 def get_global_state():
     return {
         "admin_started": False,
-        "game_over": False,  # [추가] 게임 종료 유무 판단 플래그
+        "game_over": False,  
         "max_per_room": 6,     
         "rooms": {},     
         "players": {}    
@@ -120,7 +120,6 @@ elif st.session_state["nickname"] == "admin":
     with col1:
         st.subheader("게임 통제 센터")
         
-        # 단계별 관리자 UI 제어 흐름
         if not db["admin_started"]:
             new_max = st.selectbox(
                 "👥 1개 조(방)당 최대 인원 설정", 
@@ -183,7 +182,6 @@ else:
     my_room_id = p_data["room"]
     room_data = db["rooms"][my_room_id]
     
-    # 상단 글로벌 종료 안내 메시지
     is_frozen = db["game_over"]
     if is_frozen:
         st.error("🏁 교수님이 게임을 종료했습니다! 칠판(화면)을 통해 최종 등수를 확인하세요.")
@@ -269,7 +267,6 @@ else:
                 
                 btn_text = f"✅ ~{word}~" if is_checked else word
                 
-                # 게임 종료 시 모든 빙고 단어판 클릭 비활성화(disabled=is_frozen)
                 if cols[j].button(btn_text, key=f"btn_{i}_{j}", use_container_width=True, disabled=is_frozen):
                     p_data['checked'][i][j] = not is_checked 
                     st.rerun()
