@@ -7,35 +7,6 @@ import re
 # ==========================================
 st.set_page_config(page_title="경제학 빙고 게임", layout="wide")
 
-# [강력한 수정판] 모바일 빙고판 4x4 강제 고정 CSS
-st.markdown("""
-<style>
-    /* 1. 부모 컨테이너가 모바일에서 세로로 꺾이는 것을 원천 차단 */
-    div[data-testid="stHorizontalBlock"] {
-        flex-wrap: nowrap !important;
-        gap: 2px !important;
-    }
-    
-    /* 2. 각 칸을 정확히 4등분(25%)으로 고정 */
-    div[data-testid="column"] {
-        width: 25% !important;
-        min-width: 25% !important;
-        flex: 1 1 25% !important;
-        padding: 0px !important;
-    }
-    
-    /* 3. 버튼 디자인 및 텍스트 줄바꿈 최적화 */
-    .stButton > button {
-        height: 70px !important;
-        width: 100% !important;
-        padding: 0px !important;
-        font-size: 12px !important;
-        word-break: keep-all !important;
-        white-space: pre-wrap !important;
-    }
-</style>
-""", unsafe_allow_html=True)
-
 TERMS = [
     "수요", "공급", "기회비용", "독점", "과점", "GDP", "인플레이션", 
     "디플레이션", "GNP", "거시경제학", "미시경제학", "대체재", "국채", 
